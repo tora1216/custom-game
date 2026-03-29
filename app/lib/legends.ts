@@ -1,4 +1,4 @@
-export type LegendRole = 'アサルト' | 'スカーミッシャー' | 'スキャン' | 'サポート' | 'コントローラー';
+export type LegendRole = 'アサルト' | 'スカーミッシャー' | 'リコン' | 'サポート' | 'コントローラー';
 
 export type Legend = {
   name: string;
@@ -8,7 +8,7 @@ export type Legend = {
 export const LEGEND_ROLES: LegendRole[] = [
   'アサルト',
   'スカーミッシャー',
-  'スキャン',
+  'リコン',
   'サポート',
   'コントローラー',
 ];
@@ -16,7 +16,7 @@ export const LEGEND_ROLES: LegendRole[] = [
 export const ROLE_COLORS: Record<LegendRole, string> = {
   アサルト:       'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
   スカーミッシャー: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
-  スキャン:       'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+  リコン:       'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
   サポート:       'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
   コントローラー:  'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
 };
@@ -35,13 +35,13 @@ export const LEGENDS: Legend[] = [
   { name: 'ホライゾン',      role: 'スカーミッシャー' },
   { name: 'オルター',      role: 'スカーミッシャー' },
   { name: 'アッシュ',        role: 'スカーミッシャー' },
-  // スキャン
-  { name: 'ブラッドハウンド', role: 'スキャン' },
-  { name: 'クリプト',        role: 'スキャン' },
-  { name: 'シア',            role: 'スキャン' },
-  { name: 'ヴァンテージ',    role: 'スキャン' },
-  { name: 'ヴァルキリー',    role: 'スキャン' },
-  { name: 'スパロー',    role: 'スキャン' },
+  // リコン
+  { name: 'ブラッドハウンド', role: 'リコン' },
+  { name: 'クリプト',        role: 'リコン' },
+  { name: 'シア',            role: 'リコン' },
+  { name: 'ヴァンテージ',    role: 'リコン' },
+  { name: 'ヴァルキリー',    role: 'リコン' },
+  { name: 'スパロー',    role: 'リコン' },
   // サポート
   { name: 'ライフライン',     role: 'サポート' },
   { name: 'ニューキャッスル', role: 'サポート' },

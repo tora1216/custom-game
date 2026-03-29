@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { RANK_COLORS, RANK_POINTS, Custom } from '../../lib/types';
+import { RANK_COLORS, RANK_POINTS, Custom, Rank, RANKS } from '../../lib/types';
 import { Team, DivisionMode, divideTeams, divideTeamsRandom } from '../../lib/teamDivision';
 import { Legend, LEGENDS, LEGEND_ROLES, ROLE_COLORS, assignLegends } from '../../lib/legends';
-import ThemeToggle from '../../components/ThemeToggle';
+
 
 const STORAGE_KEY = 'customs';
 const TEAM_BG = [
@@ -77,6 +77,19 @@ export default function CustomDetail({ id }: { id: string }) {
   const [disabledMaps, setDisabledMaps] = useState<string[]>([]);
   const [showMapList, setShowMapList] = useState(false);
 
+  // 参加/欠席切り替え
+  const [absentIds, setAbsentIds] = useState<Set<string>>(new Set());
+  // チーム手動入れ替え
+  const [swapMode, setSwapMode] = useState(false);
+  const [swapSource, setSwapSource] = useState<{ teamIdx: number; playerIdx: number } | null>(null);
+  // テキスト共有トースト
+  const [copyToast, setCopyToast] = useState(false);
+
+  // プレイヤー追加
+  const [showAddPlayer, setShowAddPlayer] = useState(false);
+  const [addPlayerName, setAddPlayerName] = useState('');
+  const [addPlayerRank, setAddPlayerRank] = useState<Rank>('ブロンズ');
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -109,12 +122,17 @@ export default function CustomDetail({ id }: { id: string }) {
 
   function runDivision() {
     if (!custom || divisionAnimating) return;
-    const result = divisionMode === 'random'
-      ? divideTeamsRandom(custom.players, numTeams)
-      : divideTeams(custom.players, numTeams);
+    const activePlayers = custom.players.filter((p) => !absentIds.has(p.name));
+    if (activePlayers.length === 0) return;
+    const result =
+      divisionMode === 'random'
+        ? divideTeamsRandom(activePlayers, numTeams)
+        : divideTeams(activePlayers, numTeams);
 
     setDivisionAnimating(true);
     setEditingTeamIdx(null);
+    setSwapMode(false);
+    setSwapSource(null);
 
     let tick = 0;
     const totalTicks = 18;
@@ -128,7 +146,7 @@ export default function CustomDetail({ id }: { id: string }) {
         setTimeout(() => setDivisionAnimating(false), 150);
         return;
       }
-      setDisplayTeams(divideTeamsRandom(custom!.players, numTeams));
+      setDisplayTeams(divideTeamsRandom(activePlayers, numTeams));
       const delay = tick < 6 ? 60 : tick < 12 ? 110 : 180;
       setTimeout(step, delay);
     }
@@ -144,7 +162,8 @@ export default function CustomDetail({ id }: { id: string }) {
   function commitTeamName() {
     if (editingTeamIdx === null) return;
     const next = [...teamNames];
-    next[editingTeamIdx] = editingTeamName.trim() || (teams[editingTeamIdx]?.name ?? `チーム${editingTeamIdx + 1}`);
+    next[editingTeamIdx] =
+      editingTeamName.trim() || (teams[editingTeamIdx]?.name ?? `チーム${editingTeamIdx + 1}`);
     setTeamNames(next);
     setEditingTeamIdx(null);
   }
@@ -179,9 +198,8 @@ export default function CustomDetail({ id }: { id: string }) {
     if (slotAnimating || !custom) return;
     setSlotAnimating(true);
 
-    const count = randomSlotCount === 'random'
-      ? Math.floor(Math.random() * 4) + 1
-      : randomSlotCount;
+    const count =
+      randomSlotCount === 'random' ? Math.floor(Math.random() * 4) + 1 : randomSlotCount;
     const final = [1, 2, 3, 4, 5]
       .sort(() => Math.random() - 0.5)
       .slice(0, count)
@@ -211,9 +229,7 @@ export default function CustomDetail({ id }: { id: string }) {
     step();
   }
 
-  const displayedSlots = slotAnimating
-    ? slotDisplay
-    : (custom?.weaponRestriction ?? []);
+  const displayedSlots = slotAnimating ? slotDisplay : (custom?.weaponRestriction ?? []);
 
   function toggleExcludedRole(role: string) {
     if (!custom) return;
@@ -231,9 +247,10 @@ export default function CustomDetail({ id }: { id: string }) {
     if (legendTeamMode && teams.length >= 2) {
       const excluded = custom.legendExcludedRoles ?? [];
       const pool = LEGENDS.filter((l) => !excluded.includes(l.role));
-      // 共通レジェンドプールをシャッフルして各チームの人数分を確保
       const maxSize = Math.max(...teams.map((t) => t.players.length));
-      const sharedLegends = [...pool].sort(() => Math.random() - 0.5).slice(0, Math.min(maxSize, pool.length));
+      const sharedLegends = [...pool]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, Math.min(maxSize, pool.length));
 
       const result: Record<string, Legend> = {};
       teams.forEach((team) => {
@@ -277,6 +294,66 @@ export default function CustomDetail({ id }: { id: string }) {
     step();
   }
 
+  function handlePlayerClick(teamIdx: number, playerIdx: number) {
+    if (!swapMode || divisionAnimating) return;
+    if (!swapSource) {
+      setSwapSource({ teamIdx, playerIdx });
+      return;
+    }
+    if (swapSource.teamIdx === teamIdx && swapSource.playerIdx === playerIdx) {
+      setSwapSource(null);
+      return;
+    }
+    const newTeams = teams.map((t) => ({ ...t, players: [...t.players] }));
+    const a = newTeams[swapSource.teamIdx].players[swapSource.playerIdx];
+    const b = newTeams[teamIdx].players[playerIdx];
+    newTeams[swapSource.teamIdx].players[swapSource.playerIdx] = b;
+    newTeams[teamIdx].players[playerIdx] = a;
+    newTeams.forEach((t) => {
+      t.totalPoints = t.players.reduce((sum, p) => sum + RANK_POINTS[p.rank], 0);
+    });
+    setTeams(newTeams);
+    setDisplayTeams(newTeams);
+    setSwapSource(null);
+  }
+
+  function addPlayerToCustom() {
+    if (!custom || !addPlayerName.trim()) return;
+    const newPlayer = { name: addPlayerName.trim(), rank: addPlayerRank };
+    persist({ ...custom, players: [...custom.players, newPlayer] });
+    setAddPlayerName('');
+  }
+
+  function copyShareText() {
+    if (!custom) return;
+    const lines: string[] = [`【${custom.name}】`];
+    if (teams.length > 0) {
+      teams.forEach((team, i) => {
+        const name = teamNames[i] ?? team.name;
+        const players = team.players.map((p) => `${p.name}(${p.rank})`).join(' / ');
+        lines.push(`${name}: ${players}`);
+      });
+    }
+    if (mapResult) lines.push(`マップ: ${mapResult}`);
+    if (Object.keys(legendResult).length > 0) {
+      lines.push('レジェンド:');
+      Object.entries(legendResult).forEach(([name, legend]) => {
+        lines.push(`  ${name} → ${legend.name}`);
+      });
+    }
+    if ((custom.weaponRestriction ?? []).length > 0) {
+      lines.push(`武器縛り: スロット${[...custom.weaponRestriction].sort().join('・')}`);
+    }
+    if (custom.specialRules.length > 0) {
+      lines.push('追加ルール:');
+      custom.specialRules.forEach((r) => lines.push(`  - ${r}`));
+    }
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      setCopyToast(true);
+      setTimeout(() => setCopyToast(false), 2000);
+    });
+  }
+
   if (!custom) {
     return (
       <div className="flex min-h-screen items-center justify-center text-zinc-500">
@@ -307,14 +384,15 @@ export default function CustomDetail({ id }: { id: string }) {
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <ThemeToggle />
             <button
-              aria-label="設定"
+              onClick={copyShareText}
+              aria-label="テキストをコピー"
               className="rounded-full p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-[#272847] dark:hover:text-zinc-200"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
               </svg>
             </button>
           </div>
@@ -324,23 +402,95 @@ export default function CustomDetail({ id }: { id: string }) {
       {/* Player summary */}
       <div className="mx-auto max-w-xl px-4 pt-6">
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-[#2c2f52] dark:bg-[#20213a]">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">参加プレイヤー</p>
-          {custom.players.length === 0 ? (
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">参加プレイヤー</p>
+            <button
+              onClick={() => { setShowAddPlayer((v) => !v); setAddPlayerName(''); }}
+              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                showAddPlayer
+                  ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                  : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-[#30335a] dark:text-zinc-400'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+              追加
+            </button>
+          </div>
+          {custom.players.length === 0 && !showAddPlayer && (
             <p className="text-sm text-zinc-400">プレイヤーなし</p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {custom.players.map((p, i) => (
-                <span
-                  key={i}
-                  className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 py-1 pl-1 pr-2.5 text-xs dark:border-[#383c68] dark:bg-[#272847]"
-                >
-                  <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${RANK_COLORS[p.rank]}`}>
-                    {p.rank}
-                  </span>
-                  <span className="text-zinc-700 dark:text-zinc-300">{p.name}</span>
-                  <span className="text-zinc-400">({RANK_POINTS[p.rank]}pt)</span>
-                </span>
-              ))}
+          )}
+          {custom.players.length > 0 && (
+            <>
+              <div className="flex flex-wrap gap-1.5">
+                {custom.players.map((p, i) => {
+                  const absent = absentIds.has(p.name);
+                  return (
+                    <button
+                      key={i}
+                      onClick={() =>
+                        setAbsentIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(p.name)) next.delete(p.name);
+                          else next.add(p.name);
+                          return next;
+                        })
+                      }
+                      className={`flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 text-xs transition-opacity ${
+                        absent
+                          ? 'border-zinc-200 bg-zinc-100 opacity-40 dark:border-[#383c68] dark:bg-[#272847]'
+                          : 'border-zinc-200 bg-zinc-50 dark:border-[#383c68] dark:bg-[#272847]'
+                      }`}
+                    >
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${absent ? 'opacity-60' : ''} ${RANK_COLORS[p.rank]}`}
+                      >
+                        {p.rank}
+                      </span>
+                      <span
+                        className={`${absent ? 'line-through text-zinc-400' : 'text-zinc-700 dark:text-zinc-300'}`}
+                      >
+                        {p.name}
+                      </span>
+                      {!absent && <span className="text-zinc-400">({RANK_POINTS[p.rank]}pt)</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              {absentIds.size > 0 && (
+                <p className="mt-2 text-xs text-zinc-400">
+                  ※ {absentIds.size}人が欠席（タップで参加/欠席を切り替え）
+                </p>
+              )}
+            </>
+          )}
+          {/* Add player form — shown when toggled */}
+          {showAddPlayer && (
+            <div className="mt-3 flex gap-2 border-t border-zinc-100 pt-3 dark:border-[#2c2f52]">
+              <input
+                type="text"
+                value={addPlayerName}
+                onChange={(e) => setAddPlayerName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addPlayerToCustom()}
+                placeholder="プレイヤー名"
+                autoFocus
+                className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 dark:border-[#383c68] dark:bg-[#272847] dark:text-zinc-50 dark:placeholder-zinc-500"
+              />
+              <select
+                value={addPlayerRank}
+                onChange={(e) => setAddPlayerRank(e.target.value as Rank)}
+                className="rounded-xl border border-zinc-200 px-2 py-2 text-sm text-zinc-900 focus:border-emerald-400 focus:outline-none dark:border-[#383c68] dark:bg-[#272847] dark:text-zinc-50"
+              >
+                {RANKS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <button
+                onClick={addPlayerToCustom}
+                disabled={!addPlayerName.trim()}
+                className="shrink-0 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:opacity-40 active:scale-95 transition-transform"
+              >
+                追加
+              </button>
             </div>
           )}
         </div>
@@ -349,476 +499,591 @@ export default function CustomDetail({ id }: { id: string }) {
       {/* Content */}
       <div className="mx-auto max-w-xl px-4 py-6">
         <div className="space-y-6">
-            {/* チーム分け・ハンデ */}
-            <div className="rounded-xl border border-zinc-200 bg-white dark:border-[#2c2f52] dark:bg-[#20213a] overflow-hidden">
-              <div className="px-4 pt-3 pb-0">
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">チーム分け</p>
-              </div>
-              {/* 分け方 + 実行ボタン */}
-              <div className="flex items-center gap-3 px-4 py-3">
-                <div className="flex flex-1 gap-2">
-                  {([
+          {/* チーム分け・ハンデ */}
+          <div className="rounded-xl border border-zinc-200 bg-white dark:border-[#2c2f52] dark:bg-[#20213a] overflow-hidden">
+            <div className="px-4 pt-3 pb-0">
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">チーム分け</p>
+            </div>
+            {/* 分け方 + 実行ボタン */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="flex flex-1 gap-2">
+                {(
+                  [
                     { value: 'balanced', label: '🎯 レベル順' },
-                    { value: 'random',   label: '🎲 ランダム' },
-                  ] as { value: DivisionMode; label: string }[]).map(({ value, label }) => (
-                    <button
-                      key={value}
-                      onClick={() => setDivisionMode(value)}
-                      className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors ${
-                        divisionMode === value
-                          ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
-                          : 'border-zinc-200 text-zinc-600 hover:border-zinc-300 dark:border-[#383c68] dark:text-zinc-400'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={runDivision}
-                  disabled={custom.players.length === 0 || divisionAnimating}
-                  className="shrink-0 flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95 transition-transform"
-                >
-                  {teams.length > 0 ? (
-                    <>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                      </svg>
-                      再実行
-                    </>
-                  ) : (
-                    'チーム分け'
-                  )}
-                </button>
+                    { value: 'random', label: '🎲 ランダム' },
+                  ] as { value: DivisionMode; label: string }[]
+                ).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setDivisionMode(value)}
+                    className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors ${
+                      divisionMode === value
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
+                        : 'border-zinc-200 text-zinc-600 hover:border-zinc-300 dark:border-[#383c68] dark:text-zinc-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-
-              {/* チーム結果 */}
-              {(teams.length > 0 || divisionAnimating) && displayTeams.length > 0 && (
-                <>
-                  <div className={`grid grid-cols-2 border-t border-zinc-100 dark:border-[#2c2f52]`}>
-                    {displayTeams.map((team, i) => (
-                      <div
-                        key={i}
-                        className={`${i > 0 ? 'border-l border-zinc-100 dark:border-[#2c2f52]' : ''} overflow-hidden`}
-                      >
-                        <div className={`flex items-center justify-between px-3 py-2 ${TEAM_HEADER[i % TEAM_HEADER.length]}`}>
-                          {!divisionAnimating && editingTeamIdx === i ? (
-                            <input
-                              ref={teamNameInputRef}
-                              value={editingTeamName}
-                              onChange={(e) => setEditingTeamName(e.target.value)}
-                              onBlur={commitTeamName}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') commitTeamName();
-                                if (e.key === 'Escape') setEditingTeamIdx(null);
-                              }}
-                              className="flex-1 bg-transparent text-sm font-semibold text-white placeholder-white/50 outline-none border-b border-white/50 min-w-0"
-                            />
-                          ) : (
-                            <button
-                              onClick={() => startEditTeamName(i)}
-                              className="flex items-center gap-1 text-sm font-semibold text-white hover:opacity-75 transition-opacity min-w-0"
-                            >
-                              <span className="truncate">{teamNames[i] ?? team.name}</span>
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0 opacity-60" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                              </svg>
-                            </button>
-                          )}
-                          <span className="shrink-0 text-xs text-white/70 ml-1">{team.totalPoints}pt</span>
-                        </div>
-                        <ul className="divide-y divide-zinc-100 dark:divide-[#2c2f52]">
-                          {team.players.map((p, j) => (
-                            <li key={j} className="flex items-center gap-1.5 px-3 py-1.5">
-                              <span className={`inline-block w-14 rounded-full py-0.5 text-center text-xs font-semibold ${RANK_COLORS[p.rank]}`}>
-                                {p.rank}
-                              </span>
-                              <span className="flex-1 truncate text-sm text-zinc-800 dark:text-zinc-200">{p.name}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-
-                </>
-              )}
-            </div>
-
-            {/* ── セクション区切り ── */}
-            <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-zinc-200 dark:bg-[#2c2f52]" />
-              <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400">特別ルール</span>
-              <div className="h-px flex-1 bg-zinc-200 dark:bg-[#2c2f52]" />
-            </div>
-
-            {/* ── マップルーレット ── */}
-            <div className={`rounded-xl border bg-white dark:bg-[#20213a] overflow-hidden transition-colors ${openMap ? 'border-indigo-300 dark:border-indigo-700' : 'border-zinc-200 dark:border-[#2c2f52]'}`}>
               <button
-                onClick={() => setOpenMap((v) => !v)}
-                className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                onClick={runDivision}
+                disabled={custom.players.length === 0 || divisionAnimating}
+                className="shrink-0 flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95 transition-transform"
               >
-                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${openMap ? 'border-indigo-500 bg-indigo-500 dark:border-indigo-400 dark:bg-indigo-500' : 'border-zinc-300 dark:border-[#4a4e7a]'}`}>
-                  {openMap && (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                {teams.length > 0 ? (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
                     </svg>
-                  )}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-zinc-900 dark:text-zinc-50">マップルーレット</p>
-                  <p className="text-xs text-zinc-400">TDMマップをランダムで決定</p>
-                </div>
-                {mapResult && !openMap && (
-                  <span className="shrink-0 rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400">{mapResult}</span>
+                    再実行
+                  </>
+                ) : (
+                  'チーム分け'
                 )}
               </button>
+            </div>
 
-              {openMap && (
-                <div className="border-t border-zinc-100 p-4 dark:border-[#2c2f52]">
-                  <div className="mb-3 flex items-center justify-between gap-2">
+            {/* チーム結果 */}
+            {(teams.length > 0 || divisionAnimating) && displayTeams.length > 0 && (
+              <>
+                <div className="grid grid-cols-2 border-t border-zinc-100 dark:border-[#2c2f52]">
+                  {displayTeams.map((team, i) => (
+                    <div
+                      key={i}
+                      className={`${i > 0 ? 'border-l border-zinc-100 dark:border-[#2c2f52]' : ''} overflow-hidden`}
+                    >
+                      <div
+                        className={`flex items-center justify-between px-3 py-2 ${TEAM_HEADER[i % TEAM_HEADER.length]}`}
+                      >
+                        {!divisionAnimating && editingTeamIdx === i ? (
+                          <input
+                            ref={teamNameInputRef}
+                            value={editingTeamName}
+                            onChange={(e) => setEditingTeamName(e.target.value)}
+                            onBlur={commitTeamName}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') commitTeamName();
+                              if (e.key === 'Escape') setEditingTeamIdx(null);
+                            }}
+                            className="flex-1 bg-transparent text-sm font-semibold text-white placeholder-white/50 outline-none border-b border-white/50 min-w-0"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => startEditTeamName(i)}
+                            className="flex items-center gap-1 text-sm font-semibold text-white hover:opacity-75 transition-opacity min-w-0"
+                          >
+                            <span className="truncate">{teamNames[i] ?? team.name}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0 opacity-60" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                            </svg>
+                          </button>
+                        )}
+                        <span className="shrink-0 text-xs text-white/70 ml-1">
+                          {teams[i]?.totalPoints ?? team.totalPoints}pt
+                        </span>
+                      </div>
+                      <ul className="divide-y divide-zinc-100 dark:divide-[#2c2f52]">
+                        {team.players.map((p, j) => (
+                          <li
+                            key={j}
+                            onClick={() => handlePlayerClick(i, j)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${
+                              swapMode
+                                ? 'cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
+                                : ''
+                            } ${
+                              swapSource?.teamIdx === i && swapSource?.playerIdx === j
+                                ? 'bg-amber-50 dark:bg-amber-950/30'
+                                : ''
+                            }`}
+                          >
+                            <span
+                              className={`inline-block w-14 rounded-full py-0.5 text-center text-xs font-semibold ${RANK_COLORS[p.rank]}`}
+                            >
+                              {p.rank}
+                            </span>
+                            <span className="flex-1 truncate text-sm text-zinc-800 dark:text-zinc-200">
+                              {p.name}
+                            </span>
+                            {swapMode &&
+                              swapSource?.teamIdx === i &&
+                              swapSource?.playerIdx === j && (
+                                <span className="text-xs text-amber-500 font-semibold">選択中</span>
+                              )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 入れ替えボタン */}
+                {!divisionAnimating && teams.length > 0 && (
+                  <div className="flex items-center border-t border-zinc-100 px-4 py-2.5 dark:border-[#2c2f52]">
                     <button
-                      onClick={() => setShowMapList((v) => !v)}
-                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                        showMapList
-                          ? 'bg-zinc-200 text-zinc-600 dark:bg-[#383c68] dark:text-zinc-300'
+                      onClick={() => {
+                        setSwapMode((v) => !v);
+                        setSwapSource(null);
+                      }}
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        swapMode
+                          ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'
                           : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-[#30335a] dark:text-zinc-400'
                       }`}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V15a1 1 0 01-.553.894l-4 2A1 1 0 017 17v-6.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+                        <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8zM12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
                       </svg>
-                      マップを絞り込む
-                      {disabledMaps.length > 0 && (
-                        <span className="rounded-full bg-indigo-500 px-1.5 py-0.5 text-xs text-white leading-none">
-                          {disabledMaps.length}除外
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      onClick={spinMap}
-                      disabled={mapAnimating || TDM_MAPS.filter((m) => !disabledMaps.includes(m)).length === 0}
-                      className="flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-500 hover:bg-violet-100 disabled:opacity-50 active:scale-95 transition-transform dark:bg-violet-900/30 dark:text-violet-400"
-                    >
-                      🎲 スピン
+                      {swapMode ? '入れ替え中' : '入れ替え'}
                     </button>
                   </div>
-
-                  {showMapList && (
-                    <div className="mb-3 flex flex-wrap gap-1.5">
-                      {TDM_MAPS.map((m) => {
-                        const disabled = disabledMaps.includes(m);
-                        return (
-                          <button
-                            key={m}
-                            onClick={() => setDisabledMaps((prev) =>
-                              disabled ? prev.filter((x) => x !== m) : [...prev, m]
-                            )}
-                            className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                              disabled
-                                ? 'bg-zinc-100 text-zinc-300 line-through dark:bg-[#272847] dark:text-zinc-600'
-                                : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-[#30335a] dark:text-zinc-300 dark:hover:bg-[#383c68]'
-                            }`}
-                          >
-                            {m}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <div className={`flex min-h-[4.5rem] items-center justify-center rounded-xl border-2 transition-colors ${
-                    mapResult && !mapAnimating
-                      ? 'border-indigo-400 bg-indigo-50 dark:border-indigo-600 dark:bg-indigo-950/40'
-                      : 'border-dashed border-zinc-200 bg-zinc-50 dark:border-[#383c68] dark:bg-[#272847]'
-                  }`}>
-                    {mapDisplay || mapResult ? (
-                      <p className={`text-lg font-bold transition-all ${mapAnimating ? 'text-zinc-400 dark:text-zinc-500' : 'text-indigo-600 dark:text-indigo-400'}`}>
-                        {mapAnimating ? (mapDisplay || '…') : mapResult}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-zinc-400">スピンボタンでマップを決定</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ── レジェンド縛り ── */}
-            <div className={`rounded-xl border bg-white dark:bg-[#20213a] overflow-hidden transition-colors ${openLegend ? 'border-indigo-300 dark:border-indigo-700' : 'border-zinc-200 dark:border-[#2c2f52]'}`}>
-              <button
-                onClick={() => setOpenLegend((v) => !v)}
-                className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
-              >
-                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${openLegend ? 'border-indigo-500 bg-indigo-500 dark:border-indigo-400 dark:bg-indigo-500' : 'border-zinc-300 dark:border-[#4a4e7a]'}`}>
-                  {openLegend && (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-zinc-900 dark:text-zinc-50">レジェンド縛り</p>
-                  <p className="text-xs text-zinc-400">各プレイヤーにレジェンドをランダムで割り当て</p>
-                </div>
-              </button>
-
-              {openLegend && (
-                <>
-                  <div className="border-t border-zinc-100 px-4 py-3 dark:border-[#2c2f52]">
-                    <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">除外するロール</p>
-                    <div className="flex flex-wrap gap-2">
-                      {LEGEND_ROLES.map((role) => {
-                        const excluded = (custom.legendExcludedRoles ?? []).includes(role);
-                        return (
-                          <button
-                            key={role}
-                            onClick={() => toggleExcludedRole(role)}
-                            className={`rounded-full px-3 py-1 text-xs font-semibold transition-opacity ${
-                              excluded ? 'opacity-35 ring-2 ring-zinc-300 dark:ring-zinc-600' : ''
-                            } ${ROLE_COLORS[role as keyof typeof ROLE_COLORS]}`}
-                          >
-                            {excluded ? '✕ ' : ''}{role}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div className="border-t border-zinc-100 px-4 py-3 dark:border-[#2c2f52]">
-                    <div className="flex items-center justify-between gap-3">
-                      <button
-                        onClick={runLegendAssign}
-                        disabled={custom.players.length === 0}
-                        className="flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95 transition-transform"
-                      >
-                        レジェンド割り当て
-                      </button>
-                      <button
-                        onClick={() => setLegendTeamMode((v) => !v)}
-                        disabled={teams.length < 2}
-                        className="flex items-center gap-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2 transition-colors ${legendTeamMode ? 'border-indigo-500 bg-indigo-500' : 'border-zinc-300 dark:border-zinc-500'}`}>
-                          {legendTeamMode && (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-white" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </span>
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">チーム別で同じ構成</span>
-                      </button>
-                    </div>
-                  </div>
-                  {Object.keys(legendResult).length > 0 && (
-                    <div className="border-t border-zinc-100 dark:border-[#2c2f52]">
-                      {legendTeamMode && teams.length >= 2 ? (
-                        <>
-                          {teams.map((team, ti) => (
-                            <div key={ti} className={ti > 0 ? 'border-t border-zinc-100 dark:border-[#2c2f52]' : ''}>
-                              <p className={`px-4 py-1.5 text-xs font-semibold text-white ${TEAM_HEADER[ti % TEAM_HEADER.length]}`}>
-                                {teamNames[ti] ?? team.name}
-                              </p>
-                              <ul className="divide-y divide-zinc-100 dark:divide-[#2c2f52]">
-                                {team.players.map((p, idx) => {
-                                  const legend = legendResult[p.name];
-                                  if (!legend) return null;
-                                  return (
-                                    <li key={idx} className="flex items-center justify-between px-4 py-2.5">
-                                      <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{p.name}</span>
-                                      <div className="flex items-center gap-2">
-                                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[legend.role]}`}>
-                                          {legend.role}
-                                        </span>
-                                        <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">{legend.name}</span>
-                                      </div>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            </div>
-                          ))}
-                        </>
-                      ) : (
-                        <ul className="divide-y divide-zinc-100 dark:divide-[#2c2f52]">
-                          {custom.players.map((p, idx) => {
-                            const legend = legendResult[p.name];
-                            if (!legend) return null;
-                            return (
-                              <li key={idx} className="flex items-center justify-between px-4 py-2.5">
-                                <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{p.name}</span>
-                                <div className="flex items-center gap-2">
-                                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[legend.role]}`}>
-                                    {legend.role}
-                                  </span>
-                                  <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">{legend.name}</span>
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* ── 武器縛り ── */}
-            <div className={`rounded-xl border bg-white dark:bg-[#20213a] overflow-hidden transition-colors ${openWeapon ? 'border-indigo-300 dark:border-indigo-700' : 'border-zinc-200 dark:border-[#2c2f52]'}`}>
-              <button
-                onClick={() => {
-                  const next = !openWeapon;
-                  setOpenWeapon(next);
-                  if (!next && custom) persist({ ...custom, weaponRestriction: [] });
-                }}
-                className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
-              >
-                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${openWeapon ? 'border-indigo-500 bg-indigo-500 dark:border-indigo-400 dark:bg-indigo-500' : 'border-zinc-300 dark:border-[#4a4e7a]'}`}>
-                  {openWeapon && (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-zinc-900 dark:text-zinc-50">武器縛り</p>
-                  <p className="text-xs text-zinc-400">使用できる武器スロットを選択</p>
-                </div>
-                {(custom.weaponRestriction ?? []).length > 0 && !openWeapon && (
-                  <span className="shrink-0 rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400">
-                    スロット {[...(custom.weaponRestriction ?? [])].sort().join('・')}
-                  </span>
                 )}
-              </button>
+              </>
+            )}
+          </div>
 
-              {openWeapon && (
-                <div className="border-t border-zinc-100 p-4 dark:border-[#2c2f52]">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400 shrink-0">選択数</span>
-                      <div className="flex gap-1">
-                        {(['random', 1, 2, 3, 4, 5] as (number | 'random')[]).map((v) => (
-                          <button
-                            key={v}
-                            onClick={() => setRandomSlotCount(v)}
-                            className={`h-7 min-w-[1.75rem] rounded-lg px-1.5 text-xs font-semibold transition-colors ${
-                              randomSlotCount === v
-                                ? 'bg-indigo-600 text-white'
-                                : 'border border-zinc-200 text-zinc-500 hover:border-indigo-400 hover:text-indigo-500 dark:border-[#383c68] dark:text-zinc-400'
-                            }`}
-                          >
-                            {v === 'random' ? '？' : v}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <button
-                      onClick={randomWeaponSlot}
-                      disabled={slotAnimating}
-                      className="flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-500 hover:bg-violet-100 disabled:opacity-50 active:scale-95 transition-transform dark:bg-violet-900/30 dark:text-violet-400"
-                    >
-                      🎲 ランダム
-                    </button>
-                  </div>
-                  <div className="flex gap-3">
-                    {[1, 2, 3, 4, 5].map((num) => {
-                      const active = displayedSlots.includes(String(num));
+          {/* ── セクション区切り ── */}
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-zinc-200 dark:bg-[#2c2f52]" />
+            <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400">特別ルール</span>
+            <div className="h-px flex-1 bg-zinc-200 dark:bg-[#2c2f52]" />
+          </div>
+
+          {/* ── マップルーレット ── */}
+          <div
+            className={`rounded-xl border bg-white dark:bg-[#20213a] overflow-hidden transition-colors ${openMap ? 'border-indigo-300 dark:border-indigo-700' : 'border-zinc-200 dark:border-[#2c2f52]'}`}
+          >
+            <button
+              onClick={() => setOpenMap((v) => !v)}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+            >
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${openMap ? 'border-indigo-500 bg-indigo-500 dark:border-indigo-400 dark:bg-indigo-500' : 'border-zinc-300 dark:border-[#4a4e7a]'}`}
+              >
+                {openMap && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-zinc-900 dark:text-zinc-50">マップルーレット</p>
+                <p className="text-xs text-zinc-400">TDMマップをランダムで決定</p>
+              </div>
+              {mapResult && !openMap && (
+                <span className="shrink-0 rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400">
+                  {mapResult}
+                </span>
+              )}
+            </button>
+
+            {openMap && (
+              <div className="border-t border-zinc-100 p-4 dark:border-[#2c2f52]">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => setShowMapList((v) => !v)}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                      showMapList
+                        ? 'bg-zinc-200 text-zinc-600 dark:bg-[#383c68] dark:text-zinc-300'
+                        : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-[#30335a] dark:text-zinc-400'
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V15a1 1 0 01-.553.894l-4 2A1 1 0 017 17v-6.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+                    </svg>
+                    マップを絞り込む
+                    {disabledMaps.length > 0 && (
+                      <span className="rounded-full bg-indigo-500 px-1.5 py-0.5 text-xs text-white leading-none">
+                        {disabledMaps.length}除外
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={spinMap}
+                    disabled={
+                      mapAnimating ||
+                      TDM_MAPS.filter((m) => !disabledMaps.includes(m)).length === 0
+                    }
+                    className="flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-500 hover:bg-violet-100 disabled:opacity-50 active:scale-95 transition-transform dark:bg-violet-900/30 dark:text-violet-400"
+                  >
+                    🎲 スピン
+                  </button>
+                </div>
+
+                {showMapList && (
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {TDM_MAPS.map((m) => {
+                      const disabled = disabledMaps.includes(m);
                       return (
                         <button
-                          key={num}
-                          onClick={() => toggleWeaponSlot(num)}
-                          disabled={slotAnimating}
-                          className={`relative flex h-14 w-14 items-center justify-center rounded-xl text-xl font-bold transition-all duration-100 ${
-                            active
-                              ? 'bg-indigo-600 text-white shadow-lg scale-110'
-                              : 'border-2 border-zinc-200 text-zinc-400 hover:border-indigo-400 hover:text-indigo-500 dark:border-[#383c68] dark:text-zinc-500'
-                          } ${slotAnimating && active ? 'animate-bounce' : ''}`}
+                          key={m}
+                          onClick={() =>
+                            setDisabledMaps((prev) =>
+                              disabled ? prev.filter((x) => x !== m) : [...prev, m],
+                            )
+                          }
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                            disabled
+                              ? 'bg-zinc-100 text-zinc-300 line-through dark:bg-[#272847] dark:text-zinc-600'
+                              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-[#30335a] dark:text-zinc-300 dark:hover:bg-[#383c68]'
+                          }`}
                         >
-                          {num}
+                          {m}
                         </button>
                       );
                     })}
                   </div>
-                  {displayedSlots.length > 0 && (
-                    <p className={`mt-3 text-sm transition-opacity ${slotAnimating ? 'opacity-0' : 'opacity-100'} text-zinc-500 dark:text-zinc-400`}>
-                      スロット {displayedSlots.sort().join(' ・ ')} を使用
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* ── テキスト特別ルール ── */}
-            <div className={`rounded-xl border bg-white dark:bg-[#20213a] overflow-hidden transition-colors ${openTextRules ? 'border-indigo-300 dark:border-indigo-700' : 'border-zinc-200 dark:border-[#2c2f52]'}`}>
-              <button
-                onClick={() => setOpenTextRules((v) => !v)}
-                className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
-              >
-                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${openTextRules ? 'border-indigo-500 bg-indigo-500 dark:border-indigo-400 dark:bg-indigo-500' : 'border-zinc-300 dark:border-[#4a4e7a]'}`}>
-                  {openTextRules && (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-zinc-900 dark:text-zinc-50">追加ルール</p>
-                  <p className="text-xs text-zinc-400">独自のルールを追加</p>
-                </div>
-                {custom.specialRules.length > 0 && !openTextRules && (
-                  <span className="shrink-0 rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400">
-                    {custom.specialRules.length}件
-                  </span>
                 )}
-              </button>
 
-              {openTextRules && (
-                <div className="border-t border-zinc-100 p-4 dark:border-[#2c2f52]">
-                  <div className="mb-3 flex gap-2">
-                    <input
-                      type="text"
-                      value={ruleInput}
-                      onChange={(e) => setRuleInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addRule()}
-                      placeholder="例: 建物上禁止、ケアパケ武器禁止など"
-                      className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 dark:border-[#383c68] dark:bg-[#272847] dark:text-zinc-50 dark:placeholder-zinc-500"
-                    />
-                    <button
-                      onClick={addRule}
-                      className="shrink-0 rounded-2xl bg-violet-50 px-5 py-2.5 text-sm font-bold text-violet-500 hover:bg-violet-100 active:scale-95 transition-transform dark:bg-violet-900/30 dark:text-violet-400 dark:hover:bg-violet-900/50"
+                <div
+                  className={`flex min-h-[4.5rem] items-center justify-center rounded-xl border-2 transition-colors ${
+                    mapResult && !mapAnimating
+                      ? 'border-indigo-400 bg-indigo-50 dark:border-indigo-600 dark:bg-indigo-950/40'
+                      : 'border-dashed border-zinc-200 bg-zinc-50 dark:border-[#383c68] dark:bg-[#272847]'
+                  }`}
+                >
+                  {mapDisplay || mapResult ? (
+                    <p
+                      className={`text-lg font-bold transition-all ${mapAnimating ? 'text-zinc-400 dark:text-zinc-500' : 'text-indigo-600 dark:text-indigo-400'}`}
                     >
-                      追加
+                      {mapAnimating ? mapDisplay || '…' : mapResult}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-zinc-400">スピンボタンでマップを決定</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── レジェンド縛り ── */}
+          <div
+            className={`rounded-xl border bg-white dark:bg-[#20213a] overflow-hidden transition-colors ${openLegend ? 'border-indigo-300 dark:border-indigo-700' : 'border-zinc-200 dark:border-[#2c2f52]'}`}
+          >
+            <button
+              onClick={() => setOpenLegend((v) => !v)}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+            >
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${openLegend ? 'border-indigo-500 bg-indigo-500 dark:border-indigo-400 dark:bg-indigo-500' : 'border-zinc-300 dark:border-[#4a4e7a]'}`}
+              >
+                {openLegend && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-zinc-900 dark:text-zinc-50">レジェンド縛り</p>
+                <p className="text-xs text-zinc-400">各プレイヤーにレジェンドをランダムで割り当て</p>
+              </div>
+            </button>
+
+            {openLegend && (
+              <>
+                <div className="border-t border-zinc-100 px-4 py-3 dark:border-[#2c2f52]">
+                  <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">除外するロール</p>
+                  <div className="flex flex-wrap gap-2">
+                    {LEGEND_ROLES.map((role) => {
+                      const excluded = (custom.legendExcludedRoles ?? []).includes(role);
+                      return (
+                        <button
+                          key={role}
+                          onClick={() => toggleExcludedRole(role)}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold transition-opacity ${
+                            excluded ? 'opacity-35 ring-2 ring-zinc-300 dark:ring-zinc-600' : ''
+                          } ${ROLE_COLORS[role as keyof typeof ROLE_COLORS]}`}
+                        >
+                          {excluded ? '✕ ' : ''}
+                          {role}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="border-t border-zinc-100 px-4 py-3 dark:border-[#2c2f52]">
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      onClick={runLegendAssign}
+                      disabled={custom.players.length === 0}
+                      className="flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95 transition-transform"
+                    >
+                      レジェンド割り当て
+                    </button>
+                    <button
+                      onClick={() => setLegendTeamMode((v) => !v)}
+                      disabled={teams.length < 2}
+                      className="flex items-center gap-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2 transition-colors ${legendTeamMode ? 'border-indigo-500 bg-indigo-500' : 'border-zinc-300 dark:border-zinc-500'}`}
+                      >
+                        {legendTeamMode && (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">チーム別で同じ構成</span>
                     </button>
                   </div>
-                  {custom.specialRules.length === 0 ? (
-                    <div className="rounded-xl border-2 border-dashed border-zinc-200 py-8 text-center dark:border-[#383c68]">
-                      <p className="text-sm text-zinc-400">ルールがまだありません</p>
-                    </div>
-                  ) : (
-                    <ul className="space-y-2">
-                      {custom.specialRules.map((rule, i) => (
-                        <li
-                          key={i}
-                          className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-[#2c2f52] dark:bg-[#272847]"
-                        >
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400">
-                            {i + 1}
-                          </span>
-                          <span className="flex-1 text-sm text-zinc-800 dark:text-zinc-200">{rule}</span>
-                          <button onClick={() => removeRule(i)} className="shrink-0 text-zinc-400 hover:text-red-500">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                 </div>
-              )}
-            </div>
+                {Object.keys(legendResult).length > 0 && (
+                  <div className="border-t border-zinc-100 dark:border-[#2c2f52]">
+                    {legendTeamMode && teams.length >= 2 ? (
+                      <>
+                        {teams.map((team, ti) => (
+                          <div
+                            key={ti}
+                            className={ti > 0 ? 'border-t border-zinc-100 dark:border-[#2c2f52]' : ''}
+                          >
+                            <p
+                              className={`px-4 py-1.5 text-xs font-semibold text-white ${TEAM_HEADER[ti % TEAM_HEADER.length]}`}
+                            >
+                              {teamNames[ti] ?? team.name}
+                            </p>
+                            <ul className="divide-y divide-zinc-100 dark:divide-[#2c2f52]">
+                              {team.players.map((p, idx) => {
+                                const legend = legendResult[p.name];
+                                if (!legend) return null;
+                                return (
+                                  <li key={idx} className="flex items-center justify-between px-4 py-2.5">
+                                    <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                                      {p.name}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[legend.role]}`}
+                                      >
+                                        {legend.role}
+                                      </span>
+                                      <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                                        {legend.name}
+                                      </span>
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <ul className="divide-y divide-zinc-100 dark:divide-[#2c2f52]">
+                        {custom.players.map((p, idx) => {
+                          const legend = legendResult[p.name];
+                          if (!legend) return null;
+                          return (
+                            <li key={idx} className="flex items-center justify-between px-4 py-2.5">
+                              <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                                {p.name}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[legend.role]}`}
+                                >
+                                  {legend.role}
+                                </span>
+                                <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                                  {legend.name}
+                                </span>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>
+
+          {/* ── 武器縛り ── */}
+          <div
+            className={`rounded-xl border bg-white dark:bg-[#20213a] overflow-hidden transition-colors ${openWeapon ? 'border-indigo-300 dark:border-indigo-700' : 'border-zinc-200 dark:border-[#2c2f52]'}`}
+          >
+            <button
+              onClick={() => {
+                const next = !openWeapon;
+                setOpenWeapon(next);
+                if (!next && custom) persist({ ...custom, weaponRestriction: [] });
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+            >
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${openWeapon ? 'border-indigo-500 bg-indigo-500 dark:border-indigo-400 dark:bg-indigo-500' : 'border-zinc-300 dark:border-[#4a4e7a]'}`}
+              >
+                {openWeapon && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-zinc-900 dark:text-zinc-50">武器縛り</p>
+                <p className="text-xs text-zinc-400">使用できる武器スロットを選択</p>
+              </div>
+              {(custom.weaponRestriction ?? []).length > 0 && !openWeapon && (
+                <span className="shrink-0 rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400">
+                  スロット {[...(custom.weaponRestriction ?? [])].sort().join('・')}
+                </span>
+              )}
+            </button>
+
+            {openWeapon && (
+              <div className="border-t border-zinc-100 p-4 dark:border-[#2c2f52]">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400 shrink-0">選択数</span>
+                    <div className="flex gap-1">
+                      {(['random', 1, 2, 3, 4, 5] as (number | 'random')[]).map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => setRandomSlotCount(v)}
+                          className={`h-7 min-w-[1.75rem] rounded-lg px-1.5 text-xs font-semibold transition-colors ${
+                            randomSlotCount === v
+                              ? 'bg-indigo-600 text-white'
+                              : 'border border-zinc-200 text-zinc-500 hover:border-indigo-400 hover:text-indigo-500 dark:border-[#383c68] dark:text-zinc-400'
+                          }`}
+                        >
+                          {v === 'random' ? '？' : v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={randomWeaponSlot}
+                    disabled={slotAnimating}
+                    className="flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-500 hover:bg-violet-100 disabled:opacity-50 active:scale-95 transition-transform dark:bg-violet-900/30 dark:text-violet-400"
+                  >
+                    🎲 ランダム
+                  </button>
+                </div>
+                <div className="flex gap-3">
+                  {[1, 2, 3, 4, 5].map((num) => {
+                    const active = displayedSlots.includes(String(num));
+                    return (
+                      <button
+                        key={num}
+                        onClick={() => toggleWeaponSlot(num)}
+                        disabled={slotAnimating}
+                        className={`relative flex h-14 w-14 items-center justify-center rounded-xl text-xl font-bold transition-all duration-100 ${
+                          active
+                            ? 'bg-indigo-600 text-white shadow-lg scale-110'
+                            : 'border-2 border-zinc-200 text-zinc-400 hover:border-indigo-400 hover:text-indigo-500 dark:border-[#383c68] dark:text-zinc-500'
+                        } ${slotAnimating && active ? 'animate-bounce' : ''}`}
+                      >
+                        {num}
+                      </button>
+                    );
+                  })}
+                </div>
+                {displayedSlots.length > 0 && (
+                  <p
+                    className={`mt-3 text-sm transition-opacity ${slotAnimating ? 'opacity-0' : 'opacity-100'} text-zinc-500 dark:text-zinc-400`}
+                  >
+                    スロット {displayedSlots.sort().join(' ・ ')} を使用
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── テキスト特別ルール ── */}
+          <div
+            className={`rounded-xl border bg-white dark:bg-[#20213a] overflow-hidden transition-colors ${openTextRules ? 'border-indigo-300 dark:border-indigo-700' : 'border-zinc-200 dark:border-[#2c2f52]'}`}
+          >
+            <button
+              onClick={() => setOpenTextRules((v) => !v)}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+            >
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${openTextRules ? 'border-indigo-500 bg-indigo-500 dark:border-indigo-400 dark:bg-indigo-500' : 'border-zinc-300 dark:border-[#4a4e7a]'}`}
+              >
+                {openTextRules && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-zinc-900 dark:text-zinc-50">追加ルール</p>
+                <p className="text-xs text-zinc-400">独自のルールを追加</p>
+              </div>
+              {custom.specialRules.length > 0 && !openTextRules && (
+                <span className="shrink-0 rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400">
+                  {custom.specialRules.length}件
+                </span>
+              )}
+            </button>
+
+            {openTextRules && (
+              <div className="border-t border-zinc-100 p-4 dark:border-[#2c2f52]">
+                <div className="mb-3 flex gap-2">
+                  <input
+                    type="text"
+                    value={ruleInput}
+                    onChange={(e) => setRuleInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addRule()}
+                    placeholder="例: 建物上禁止、ケアパケ武器禁止など"
+                    className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 dark:border-[#383c68] dark:bg-[#272847] dark:text-zinc-50 dark:placeholder-zinc-500"
+                  />
+                  <button
+                    onClick={addRule}
+                    className="shrink-0 rounded-2xl bg-violet-50 px-5 py-2.5 text-sm font-bold text-violet-500 hover:bg-violet-100 active:scale-95 transition-transform dark:bg-violet-900/30 dark:text-violet-400 dark:hover:bg-violet-900/50"
+                  >
+                    追加
+                  </button>
+                </div>
+                {custom.specialRules.length === 0 ? (
+                  <div className="rounded-xl border-2 border-dashed border-zinc-200 py-8 text-center dark:border-[#383c68]">
+                    <p className="text-sm text-zinc-400">ルールがまだありません</p>
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {custom.specialRules.map((rule, i) => (
+                      <li
+                        key={i}
+                        className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-[#2c2f52] dark:bg-[#272847]"
+                      >
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400">
+                          {i + 1}
+                        </span>
+                        <span className="flex-1 text-sm text-zinc-800 dark:text-zinc-200">{rule}</span>
+                        <button
+                          onClick={() => removeRule(i)}
+                          className="shrink-0 text-zinc-400 hover:text-red-500"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* コピートースト */}
+      <div
+        className={`pointer-events-none fixed bottom-8 left-1/2 z-50 -translate-x-1/2 transition-all duration-300 ${
+          copyToast ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
+        }`}
+      >
+        <div className="flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-xl dark:bg-zinc-100 dark:text-zinc-900">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-400 dark:text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+          コピーしました
+        </div>
+      </div>
+
     </div>
   );
 }

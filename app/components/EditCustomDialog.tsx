@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { TrashIcon } from '@heroicons/react/24/outline';
 import { RANKS, RANK_COLORS, Rank, Player, Custom } from '../lib/types';
 
 type Props = {
@@ -9,9 +8,10 @@ type Props = {
   onClose: () => void;
   onSave: (updated: Custom) => void;
   onDelete: (id: string) => void;
+  onDuplicate: () => void;
 };
 
-export default function EditCustomDialog({ custom, onClose, onSave, onDelete }: Props) {
+export default function EditCustomDialog({ custom, onClose, onSave, onDelete, onDuplicate }: Props) {
   const [customName, setCustomName] = useState(custom.name);
   const [playerName, setPlayerName] = useState('');
   const [playerRank, setPlayerRank] = useState<Rank>('ブロンズ');
@@ -148,42 +148,64 @@ export default function EditCustomDialog({ custom, onClose, onSave, onDelete }: 
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4">
-          {/* Delete — left */}
-          {confirmDelete ? (
-            <div className="flex items-center gap-2">
+        {/* Delete confirmation panel */}
+        {confirmDelete && (
+          <div className="mx-6 mb-4 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/50 dark:bg-red-950/30">
+            <p className="text-sm font-semibold text-red-600 dark:text-red-400">「{custom.name}」を削除しますか？</p>
+            <p className="mt-0.5 text-xs text-red-400">この操作は取り消せません。</p>
+            <div className="mt-3 flex gap-2">
               <button
                 onClick={() => { onDelete(custom.id); onClose(); }}
-                className="rounded-full bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-600 active:scale-95 transition-transform"
+                className="rounded-full bg-red-500 px-4 py-1.5 text-sm font-bold text-white hover:bg-red-600 active:scale-95 transition-transform"
               >
                 削除する
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="px-3 py-2 text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                className="rounded-full border border-zinc-200 px-4 py-1.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-[#383c68] dark:hover:bg-[#272847]"
               >
-                戻る
+                キャンセル
               </button>
             </div>
-          ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="flex items-center gap-1.5 rounded-full bg-red-50 px-4 py-2 text-sm font-bold text-red-500 hover:bg-red-100 active:scale-95 transition-transform dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
-            >
-              <TrashIcon className="h-4 w-4" />
-              削除
-            </button>
-          )}
+          </div>
+        )}
 
-          {/* Cancel + Save — right */}
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4">
+          {/* Delete — left */}
+          <button
+            onClick={() => setConfirmDelete(true)}
+            disabled={confirmDelete}
+            className="flex items-center gap-1.5 rounded-full bg-red-50 px-4 py-2 text-sm font-bold text-red-500 hover:bg-red-100 active:scale-95 transition-transform disabled:opacity-40 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+              <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+            </svg>
+            削除
+          </button>
+
+          {/* Duplicate + Cancel + Save — right */}
           <div className="flex items-center gap-2">
             <button
+              onClick={() => { onDuplicate(); onClose(); }}
+              className="flex items-center gap-1.5 rounded-full bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-200 active:scale-95 transition-transform dark:bg-[#272847] dark:text-zinc-300 dark:hover:bg-[#383c68]"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+              </svg>
+              複製
+            </button>
+            {/* <button
               onClick={onClose}
               className="px-4 py-2.5 text-sm font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
             >
               キャンセル
-            </button>
+            </button> */}
             <button
               onClick={handleSave}
               className="rounded-full bg-emerald-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-600 active:scale-95 transition-transform"

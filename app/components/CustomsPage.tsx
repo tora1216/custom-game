@@ -21,18 +21,15 @@ const SAMPLE_CUSTOMS: Custom[] = [
       { name: 'パスファインダー', rank: 'プラチナ' },
       { name: 'ブラッドハウンド', rank: 'プラチナ' },
       { name: 'オクタン', rank: 'ゴールド' },
-      { name: 'ロバ', rank: 'ゴールド' },
+      { name: 'ローバ', rank: 'ゴールド' },
       { name: 'コースティック', rank: 'シルバー' },
       { name: 'ランパート', rank: 'シルバー' },
-      { name: 'ジャオ', rank: 'ブロンズ' },
-      { name: 'ニュートン', rank: 'ブロンズ' },
     ],
     specialRules: ['ケアパケ武器禁止'],
     legendExcludedRoles: [],
     weaponRestriction: [],
     createdAt: new Date('2026-03-29T10:00:00').toISOString(),
   },
-
 ];
 
 function shortDate(iso: string) {
@@ -78,6 +75,16 @@ export default function CustomsPage() {
 
   function deleteCustom(id: string) {
     persist(customs.filter((c) => c.id !== id));
+  }
+
+  function duplicateCustom(c: Custom) {
+    const copy: Custom = {
+      ...c,
+      id: crypto.randomUUID(),
+      name: c.name + ' (コピー)',
+      createdAt: new Date().toISOString(),
+    };
+    persist([copy, ...customs]);
   }
 
   return (
@@ -131,33 +138,32 @@ export default function CustomsPage() {
                 href={`/customs/${custom.id}`}
                 className="block overflow-hidden rounded-2xl bg-white shadow-sm transition-shadow hover:shadow-md dark:bg-[#20213a]"
               >
-                {/* Body */}
-                <div className="px-4 pb-4 pt-4 pr-12">
+                <div className="px-4 pb-4 pt-4 pr-14">
                   <h2 className="font-bold text-zinc-900 dark:text-zinc-50">{custom.name}</h2>
-                  {/* Footer badges */}
-                  <div className="mt-2.5 flex items-center justify-between">
-                    <span className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:border-[#383c68] dark:bg-[#272847] dark:text-zinc-400">
+                  <div className="mt-2.5">
+                    <span className="flex w-fit items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:border-[#383c68] dark:bg-[#272847] dark:text-zinc-400">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                       </svg>
                       {custom.players.length}人
                     </span>
-                    <span className="text-xs text-zinc-400">{shortDate(custom.createdAt)}</span>
                   </div>
                 </div>
               </Link>
-
-              {/* Gear button — outside Link so click doesn't navigate */}
-              <button
-                onClick={(e) => { e.preventDefault(); setEditTarget(custom); }}
-                className="absolute right-3 top-3 rounded-full p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-[#272847] dark:hover:text-zinc-300 transition-colors"
-                aria-label="編集"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                </svg>
-              </button>
+              {/* Gear + date — absolute right column */}
+              <div className="absolute right-2 top-2 flex flex-col items-end gap-7">
+                <button
+                  onClick={() => setEditTarget(custom)}
+                  className="rounded-full p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-[#272847] dark:hover:text-zinc-300 transition-colors"
+                  aria-label="編集"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </button>
+                <span className="pr-1.5 text-[10px] leading-none text-zinc-400">作成日：{shortDate(custom.createdAt)}</span>
+              </div>
             </li>
           ))}
         </ul>
@@ -176,6 +182,7 @@ export default function CustomsPage() {
           onClose={() => setEditTarget(null)}
           onSave={(updated) => { updateCustom(updated); setEditTarget(null); }}
           onDelete={(id) => { deleteCustom(id); setEditTarget(null); }}
+          onDuplicate={() => { duplicateCustom(editTarget!); setEditTarget(null); }}
         />
       )}
     </div>
