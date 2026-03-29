@@ -23,31 +23,32 @@ export const ROLE_COLORS: Record<LegendRole, string> = {
 
 export const LEGENDS: Legend[] = [
   // アサルト
-  { name: 'アッシュ',        role: 'アサルト' },
   { name: 'バンガロール',     role: 'アサルト' },
-  { name: 'フューズ',        role: 'アサルト' },
+  { name: 'ヒヒューズ',        role: 'アサルト' },
   { name: 'レヴナント',      role: 'アサルト' },
   { name: 'マッドマギー',     role: 'アサルト' },
   { name: 'バリスティック',   role: 'アサルト' },
-  { name: 'オルター',        role: 'アサルト' },
   // スカーミッシャー
   { name: 'レイス',          role: 'スカーミッシャー' },
   { name: 'オクタン',        role: 'スカーミッシャー' },
   { name: 'パスファインダー', role: 'スカーミッシャー' },
   { name: 'ホライゾン',      role: 'スカーミッシャー' },
-  { name: 'ミラージュ',      role: 'スカーミッシャー' },
+  { name: 'オルター',      role: 'スカーミッシャー' },
+  { name: 'アッシュ',        role: 'スカーミッシャー' },
   // スキャン
   { name: 'ブラッドハウンド', role: 'スキャン' },
   { name: 'クリプト',        role: 'スキャン' },
   { name: 'シア',            role: 'スキャン' },
   { name: 'ヴァンテージ',    role: 'スキャン' },
   { name: 'ヴァルキリー',    role: 'スキャン' },
+  { name: 'スパロー',    role: 'スキャン' },
   // サポート
   { name: 'ライフライン',     role: 'サポート' },
   { name: 'ニューキャッスル', role: 'サポート' },
   { name: 'ローバ',          role: 'サポート' },
   { name: 'コンジット',      role: 'サポート' },
   { name: 'ジブラルタル',    role: 'サポート' },
+  { name: 'ミラージュ',    role: 'サポート' },
   // コントローラー
   { name: 'コースティック',   role: 'コントローラー' },
   { name: 'ワットソン',      role: 'コントローラー' },
