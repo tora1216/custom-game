@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# カスタム管理 - APEX TDM カスタムマッチ管理アプリ
 
-## Getting Started
+APEX Legends のチームデスマッチ（TDM）カスタムマッチを管理するための Web アプリです。
 
-First, run the development server:
+## 機能
+
+- **カスタム作成・管理** — カスタム名とプレイヤー（ランク付き）を登録して管理
+- **チーム分け** — レベル順（スネークドラフト）またはランダムでチームを自動振り分け、分け方アニメーション付き
+- **チーム名編集** — チームヘッダーをクリックしてインラインで名前を変更
+- **マップルーレット** — TDM マップをランダムで決定（使用しないマップの除外可能）
+- **レジェンド縛り** — プレイヤーにレジェンドをランダム割り当て（ロール除外・チーム別同構成モード対応）
+- **武器縛り** — スロット 1〜5 のトグル選択・ランダム決定（選択数指定可能）
+- **テキスト特別ルール** — 自由にルールを追加
+- **ダークモード** — システム設定に連動、手動切り替えも可能
+
+## 技術スタック
+
+- [Next.js 16](https://nextjs.org/) (App Router)
+- [Tailwind CSS v4](https://tailwindcss.com/)
+- TypeScript
+- localStorage によるデータ永続化
+
+## 開発
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+[http://localhost:3000](http://localhost:3000) で確認できます。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## デプロイ
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Vercel へのデプロイを推奨します。
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build
+```
