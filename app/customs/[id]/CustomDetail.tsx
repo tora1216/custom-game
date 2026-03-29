@@ -599,7 +599,7 @@ export default function CustomDetail({ id }: { id: string }) {
                             }`}
                           >
                             <span
-                              className={`inline-block w-14 rounded-full py-0.5 text-center text-xs font-semibold ${RANK_COLORS[p.rank]}`}
+                              className={`inline-block w-16 rounded-full py-0.5 text-center text-xs font-semibold ${RANK_COLORS[p.rank]}`}
                             >
                               {p.rank}
                             </span>
