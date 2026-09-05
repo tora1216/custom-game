@@ -2,7 +2,18 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Custom } from '../lib/types';
+import {
+  Custom,
+  DEFAULT_KILL_POINT_VALUE,
+  DEFAULT_PLACEMENT_BONUS,
+  DEFAULT_KILL_POINT_CAPS,
+  DEFAULT_KILL_POINT_CAPS_ENABLED,
+  DEFAULT_BR_RANK_POINTS,
+  DEFAULT_BR_TEAM_POINT_CAP,
+  DEFAULT_BR_FEMALE_DISCOUNT,
+  DEFAULT_BR_FEMALE_DISCOUNT_ENABLED,
+  DEFAULT_BR_HANDICAPS,
+} from '../lib/types';
 import AppHeader from './AppHeader';
 import CreateCustomDialog from './CreateCustomDialog';
 import EditCustomDialog from './EditCustomDialog';
@@ -13,6 +24,22 @@ const SAMPLE_CUSTOMS: Custom[] = [
   {
     id: 'sample-1',
     name: '第1回カスタム',
+    mode: 'チームデスマッチ',
+    brTeams: [],
+    brMatch: {
+      killPointValue: DEFAULT_KILL_POINT_VALUE,
+      placementBonus: [...DEFAULT_PLACEMENT_BONUS],
+      killPointCaps: [...DEFAULT_KILL_POINT_CAPS],
+      killPointCapsEnabled: DEFAULT_KILL_POINT_CAPS_ENABLED,
+    },
+    brMatchCount: 1,
+    brRankPoints: {
+      rankPoints: { ...DEFAULT_BR_RANK_POINTS },
+      teamPointCap: DEFAULT_BR_TEAM_POINT_CAP,
+      femaleDiscount: DEFAULT_BR_FEMALE_DISCOUNT,
+      femaleDiscountEnabled: DEFAULT_BR_FEMALE_DISCOUNT_ENABLED,
+    },
+    brHandicaps: { ...DEFAULT_BR_HANDICAPS },
     players: [
       { name: 'レイス', rank: 'プレデター' },
       { name: 'バンガロール', rank: 'マスター' },
@@ -140,7 +167,10 @@ export default function CustomsPage() {
               >
                 <div className="px-4 pb-4 pt-4 pr-14">
                   <h2 className="font-bold text-zinc-900 dark:text-zinc-50">{custom.name}</h2>
-                  <div className="mt-2.5">
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    <span className="flex w-fit items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-600 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-400">
+                      {custom.mode}
+                    </span>
                     <span className="flex w-fit items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:border-[#383c68] dark:bg-[#272847] dark:text-zinc-400">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />

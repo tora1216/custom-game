@@ -1,4 +1,12 @@
-import { Player, RANK_POINTS } from './types';
+import {
+  Player,
+  RANK_POINTS,
+  BRRankPointSettings,
+  BRTeam,
+  BRHandicapSettings,
+  BRMatchSettings,
+  brTeamTotalScore,
+} from './types';
 
 export type Team = {
   name: string;
@@ -43,6 +51,55 @@ export function divideTeams(players: Player[], numTeams: number): Team[] {
   }
 
   return teams;
+}
+
+/**
+ * バトルロイアルモードのランク制限ポイント表に基づくプレイヤーのポイント（女性はfemaleDiscount分マイナス）を返す。
+ */
+export function brPlayerPoints(player: Player, settings: BRRankPointSettings): number {
+  const base = settings.rankPoints[player.brRank ?? 'ルーキー'];
+  const applyDiscount = settings.femaleDiscountEnabled && player.isFemale;
+  return base - (applyDiscount ? settings.femaleDiscount : 0);
+}
+
+/**
+ * チームのロースター（参加ランク）ポイント合計を返す。
+ */
+export function brTeamRosterPoints(team: BRTeam, settings: BRRankPointSettings): number {
+  return team.players.reduce((sum, p) => sum + brPlayerPoints(p, settings), 0);
+}
+
+/**
+ * 上限ポイントに満たなかった分をハンデとして返す（0未満にはならない）。
+ * 例: 上限25pt・チーム20pt → 5pt
+ */
+export function brCapShortfallBonus(team: BRTeam, rankSettings: BRRankPointSettings): number {
+  return Math.max(0, rankSettings.teamPointCap - brTeamRosterPoints(team, rankSettings));
+}
+
+/**
+ * 有効なハンデをすべて合算した、チームへの加算ポイントを返す。
+ */
+export function brHandicapBonus(
+  team: BRTeam,
+  rankSettings: BRRankPointSettings,
+  handicaps: BRHandicapSettings,
+): number {
+  let bonus = 0;
+  if (handicaps.capShortfallBonus) bonus += brCapShortfallBonus(team, rankSettings);
+  return bonus;
+}
+
+/**
+ * 全試合の合計スコアに有効なハンデを加算した、最終的なチーム合計を返す。
+ */
+export function brTeamGrandTotal(
+  team: BRTeam,
+  matchSettings: BRMatchSettings,
+  rankSettings: BRRankPointSettings,
+  handicaps: BRHandicapSettings,
+): number {
+  return brTeamTotalScore(team, matchSettings) + brHandicapBonus(team, rankSettings, handicaps);
 }
 
 export type DivisionMode = 'balanced' | 'random';

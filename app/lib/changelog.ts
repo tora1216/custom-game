@@ -1,4 +1,4 @@
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 export type ChangelogEntry = {
   version: string;
@@ -8,6 +8,20 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.1.0',
+    date: '2026-09-05',
+    title: 'バトルロイアルモード追加',
+    changes: [
+      'カスタム作成時にモード選択（バトルロイアル：トリオ／デュオ、チームデスマッチ）に対応',
+      'バトルロイアル専用のチーム管理画面を追加',
+      '試合ごとのキル数・順位を記録し、複数試合の累計スコアを自動集計',
+      'ランク制限ポイント・キルポイント上限・順位ボーナス・ハンデをカスタムごとに設定可能',
+      '同一試合内での順位重複を自動防止',
+      '「ランキング」タブで全チームを累計スコア順に表示',
+      '結果を共有用テキストとしてコピー可能',
+    ],
+  },
   {
     version: '1.0.0',
     date: '2026-03-29',
