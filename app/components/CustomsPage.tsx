@@ -68,6 +68,33 @@ function shortDate(iso: string) {
   });
 }
 
+// 古いバージョンで作成されたカスタム（mode 等の新フィールドが無い）を補完する
+function normalizeCustom(c: Custom): Custom {
+  if (!c.mode) c.mode = 'チームデスマッチ';
+  if (!c.players) c.players = [];
+  if (!c.brTeams) c.brTeams = [];
+  if (!c.brMatch) {
+    c.brMatch = {
+      killPointValue: DEFAULT_KILL_POINT_VALUE,
+      placementBonus: [...DEFAULT_PLACEMENT_BONUS],
+      killPointCaps: [...DEFAULT_KILL_POINT_CAPS],
+      killPointCapsEnabled: DEFAULT_KILL_POINT_CAPS_ENABLED,
+    };
+  }
+  if (!c.brMatchCount) c.brMatchCount = 1;
+  if (!c.brRankPoints) {
+    c.brRankPoints = {
+      rankPoints: { ...DEFAULT_BR_RANK_POINTS },
+      teamPointCap: DEFAULT_BR_TEAM_POINT_CAP,
+      femaleDiscount: DEFAULT_BR_FEMALE_DISCOUNT,
+      femaleDiscountEnabled: DEFAULT_BR_FEMALE_DISCOUNT_ENABLED,
+    };
+  }
+  if (!c.brHandicaps) c.brHandicaps = { ...DEFAULT_BR_HANDICAPS };
+  if (!c.createdAt) c.createdAt = new Date().toISOString();
+  return c;
+}
+
 export default function CustomsPage() {
   const [customs, setCustoms] = useState<Custom[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
@@ -77,7 +104,8 @@ export default function CustomsPage() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        setCustoms(JSON.parse(stored));
+        const parsed: Custom[] = JSON.parse(stored);
+        setCustoms(parsed.map(normalizeCustom));
       } else {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_CUSTOMS));
         setCustoms(SAMPLE_CUSTOMS);

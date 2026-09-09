@@ -164,7 +164,7 @@ export const MODES = ['バトルロイアル：トリオ', 'バトルロイア�
 export type Mode = (typeof MODES)[number];
 
 export function isBRMode(mode: Mode): boolean {
-  return mode.startsWith('バトルロイアル');
+  return typeof mode === 'string' && mode.startsWith('バトルロイアル');
 }
 
 export type Custom = {
