@@ -48,6 +48,7 @@ function BRTeamCard({
   matchNumber,
   matchSettings,
   rankPointSettings,
+  handicapEnabled,
   takenPlacements,
   onRename,
   onRemoveTeam,
@@ -64,6 +65,7 @@ function BRTeamCard({
   matchNumber: number;
   matchSettings: BRMatchSettings;
   rankPointSettings: BRRankPointSettings;
+  handicapEnabled: boolean;
   takenPlacements: Set<number>;
   onRename: (name: string) => void;
   onRemoveTeam: () => void;
@@ -78,6 +80,7 @@ function BRTeamCard({
 
   const totalPoints = team.players.reduce((sum, p) => sum + brPlayerPoints(p, rankPointSettings), 0);
   const overCap = totalPoints > rankPointSettings.teamPointCap;
+  const shortfallBonus = handicapEnabled && !overCap ? rankPointSettings.teamPointCap - totalPoints : 0;
   const scoreBreakdown = brMatchScoreBreakdown(matchResult, matchSettings, matchNumber - 1);
 
   function commitName() {
@@ -114,6 +117,7 @@ function BRTeamCard({
         <div className="flex shrink-0 items-center gap-2">
           <span className={`text-xs font-semibold ${overCap ? 'text-red-200' : 'text-white/70'}`}>
             {totalPoints}pt{overCap ? '（上限超過）' : ''}
+            {shortfallBonus > 0 ? `（+${shortfallBonus}pt）` : ''}
           </span>
           <button
             onClick={() => { if (window.confirm(`「${team.name}」を削除しますか？`)) onRemoveTeam(); }}
@@ -874,6 +878,7 @@ export default function CustomDetailBR({ id }: { id: string }) {
                             matchNumber={currentMatch + 1}
                             matchSettings={custom.brMatch}
                             rankPointSettings={custom.brRankPoints}
+                            handicapEnabled={custom.brHandicaps.capShortfallBonus}
                             takenPlacements={takenPlacements}
                             onRename={(name) => renameTeam(i, name)}
                             onRemoveTeam={() => removeTeam(i)}
