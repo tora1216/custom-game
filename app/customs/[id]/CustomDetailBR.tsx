@@ -16,6 +16,7 @@ import {
   DEFAULT_PLACEMENT_BONUS,
   DEFAULT_KILL_POINT_CAPS,
   DEFAULT_KILL_POINT_CAPS_ENABLED,
+  DEFAULT_LEGEND_BAN_ENABLED,
   DEFAULT_BR_RANK_POINTS,
   DEFAULT_BR_TEAM_POINT_CAP,
   DEFAULT_BR_FEMALE_DISCOUNT,
@@ -25,6 +26,7 @@ import {
   brMatchScoreBreakdown,
 } from '../../lib/types';
 import { brPlayerPoints, brHandicapBonus, brTeamGrandTotal } from '../../lib/teamDivision';
+import { LEGENDS } from '../../lib/legends';
 
 const STORAGE_KEY = 'customs';
 const TEAM_HEADER = [
@@ -211,6 +213,86 @@ function BRTeamCard({
   );
 }
 
+function LegendTallyDialog({
+  prevMatchNumber,
+  banTargetMatchNumber,
+  maxTeamCount,
+  counts,
+  onUpdateCount,
+  onClose,
+}: {
+  prevMatchNumber: number;
+  banTargetMatchNumber: number;
+  maxTeamCount: number;
+  counts: Record<string, number>;
+  onUpdateCount: (legendName: string, count: number) => void;
+  onClose: () => void;
+}) {
+  const maxCount = Math.max(0, ...Object.values(counts));
+  const topLegends = maxCount > 0 ? Object.keys(counts).filter((l) => counts[l] === maxCount) : [];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl dark:bg-[#20213a] mx-4">
+        <div className="flex items-center justify-between px-6 py-4">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            第{prevMatchNumber}試合 使用レジェンド集計
+          </h2>
+          <button
+            onClick={onClose}
+            className="rounded-full p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-[#272847]"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="px-6 pb-2">
+          <p className="text-xs text-zinc-400">
+            第{prevMatchNumber}試合で各レジェンドを使用したチーム数を入力してください。最多使用レジェンドが第{banTargetMatchNumber}試合のBAN対象になります。
+          </p>
+        </div>
+
+        <div className="columns-2 gap-4 px-6 pb-6 pt-3">
+          {LEGENDS.map((legend) => {
+            const count = counts[legend.name] ?? 0;
+            const isTop = topLegends.includes(legend.name);
+            return (
+              <div
+                key={legend.name}
+                className={`flex items-center justify-between gap-2 break-inside-avoid rounded-lg px-2 py-1.5 ${
+                  isTop ? 'bg-red-50 dark:bg-red-950/20' : ''
+                }`}
+              >
+                <span className={`text-sm ${isTop ? 'font-semibold text-red-600 dark:text-red-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                  {isTop ? '🚫 ' : ''}
+                  {legend.name}
+                </span>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <select
+                    value={count}
+                    onChange={(e) => onUpdateCount(legend.name, Number(e.target.value))}
+                    className="rounded-lg border border-zinc-200 px-1.5 py-0.5 text-xs text-zinc-900 focus:border-emerald-400 focus:outline-none dark:border-[#383c68] dark:bg-[#272847] dark:text-zinc-50"
+                  >
+                    {Array.from({ length: maxTeamCount + 1 }, (_, i) => i).map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                  <span className="shrink-0 whitespace-nowrap text-xs text-zinc-400">チーム</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BRSettingsDialog({
   custom,
   onClose,
@@ -223,6 +305,8 @@ function BRSettingsDialog({
   onUpdateFemaleDiscountEnabled,
   onUpdateCapShortfallHandicap,
   onUpdateKillPointCapsEnabled,
+  onUpdateLegendBanEnabled,
+  onUpdateLegendBanMatch,
 }: {
   custom: Custom;
   onClose: () => void;
@@ -235,6 +319,8 @@ function BRSettingsDialog({
   onUpdateFemaleDiscountEnabled: (value: boolean) => void;
   onUpdateCapShortfallHandicap: (value: boolean) => void;
   onUpdateKillPointCapsEnabled: (value: boolean) => void;
+  onUpdateLegendBanEnabled: (value: boolean) => void;
+  onUpdateLegendBanMatch: (matchIdx: number, enabled: boolean) => void;
 }) {
   return (
     <div
@@ -415,6 +501,39 @@ function BRSettingsDialog({
                 );
               })}
             </div>
+
+            <label className="mt-4 flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={custom.brMatch.legendBanEnabled}
+                onChange={(e) => onUpdateLegendBanEnabled(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 rounded border-zinc-300"
+              />
+              <span>
+                レジェンドBANを有効にする
+                <br />
+                <span className="text-xs text-zinc-400">
+                  試合画面で前の試合の使用数を集計し、最多使用レジェンドを自動でBANできるようになります
+                </span>
+              </span>
+            </label>
+            <div className={`mt-3 space-y-1.5 ${custom.brMatch.legendBanEnabled ? '' : 'opacity-40'}`}>
+              {Array.from({ length: custom.brMatchCount }, (_, i) => i).map((matchIdx) => {
+                const enabled = custom.brMatch.legendBanMatches[matchIdx] ?? true;
+                return (
+                  <div key={matchIdx} className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    <span className="w-16 shrink-0">第{matchIdx + 1}試合</span>
+                    <input
+                      type="checkbox"
+                      checked={enabled}
+                      disabled={!custom.brMatch.legendBanEnabled}
+                      onChange={(e) => onUpdateLegendBanMatch(matchIdx, e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-zinc-300"
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -435,6 +554,9 @@ export default function CustomDetailBR({ id }: { id: string }) {
 
   // テキスト共有トースト
   const [copyToast, setCopyToast] = useState(false);
+
+  // レジェンド使用数集計ダイアログの開閉
+  const [showLegendTally, setShowLegendTally] = useState(false);
 
   useEffect(() => {
     try {
@@ -463,12 +585,32 @@ export default function CustomDetailBR({ id }: { id: string }) {
               placementBonus: [...DEFAULT_PLACEMENT_BONUS],
               killPointCaps: [...DEFAULT_KILL_POINT_CAPS],
               killPointCapsEnabled: DEFAULT_KILL_POINT_CAPS_ENABLED,
+              legendBanEnabled: DEFAULT_LEGEND_BAN_ENABLED,
+              legendBans: [],
+              legendBanMatches: [],
+              legendUsageCounts: [],
             };
           }
           if (!found.brMatch.killPointCaps) found.brMatch.killPointCaps = [...DEFAULT_KILL_POINT_CAPS];
           if (found.brMatch.killPointCapsEnabled === undefined) {
             found.brMatch.killPointCapsEnabled = DEFAULT_KILL_POINT_CAPS_ENABLED;
           }
+          if (found.brMatch.legendBanEnabled === undefined) {
+            found.brMatch.legendBanEnabled = DEFAULT_LEGEND_BAN_ENABLED;
+          }
+          if (!found.brMatch.legendBans) found.brMatch.legendBans = [];
+          if (!found.brMatch.legendBanMatches) found.brMatch.legendBanMatches = [];
+          if (!found.brMatch.legendUsageCounts) found.brMatch.legendUsageCounts = [];
+          // 旧レジェンド名の表記修正（ヒヒューズ→ヒューズ）を既存データにも反映
+          found.brMatch.legendBans = found.brMatch.legendBans.map((names) =>
+            names.map((n) => (n === 'ヒヒューズ' ? 'ヒューズ' : n)),
+          );
+          found.brMatch.legendUsageCounts = found.brMatch.legendUsageCounts.map((counts) => {
+            if (!('ヒヒューズ' in counts)) return counts;
+            const { 'ヒヒューズ': oldCount, ...rest } = counts;
+            rest['ヒューズ'] = (rest['ヒューズ'] ?? 0) + oldCount;
+            return rest;
+          });
           if (!found.brRankPoints) {
             found.brRankPoints = {
               rankPoints: { ...DEFAULT_BR_RANK_POINTS },
@@ -599,6 +741,47 @@ export default function CustomDetailBR({ id }: { id: string }) {
   function updateKillPointCapsEnabled(value: boolean) {
     if (!custom) return;
     persist({ ...custom, brMatch: { ...custom.brMatch, killPointCapsEnabled: value } });
+  }
+
+  function updateLegendBanEnabled(value: boolean) {
+    if (!custom) return;
+    persist({
+      ...custom,
+      brMatch: {
+        ...custom.brMatch,
+        legendBanEnabled: value,
+        legendBanMatches: value ? [] : custom.brMatch.legendBanMatches,
+      },
+    });
+  }
+
+  function updateLegendUsageCount(prevMatchIdx: number, legendName: string, count: number) {
+    if (!custom) return;
+    const nextCounts = [...custom.brMatch.legendUsageCounts];
+    while (nextCounts.length <= prevMatchIdx) nextCounts.push({});
+    const counts = { ...nextCounts[prevMatchIdx], [legendName]: Math.max(0, count) };
+    nextCounts[prevMatchIdx] = counts;
+
+    const maxCount = Math.max(0, ...Object.values(counts));
+    const topLegends = maxCount > 0 ? Object.keys(counts).filter((l) => counts[l] === maxCount) : [];
+
+    const banTargetIdx = prevMatchIdx + 1;
+    const nextBans = [...custom.brMatch.legendBans];
+    while (nextBans.length <= banTargetIdx) nextBans.push([]);
+    nextBans[banTargetIdx] = topLegends;
+
+    persist({
+      ...custom,
+      brMatch: { ...custom.brMatch, legendUsageCounts: nextCounts, legendBans: nextBans },
+    });
+  }
+
+  function updateLegendBanMatch(matchIdx: number, enabled: boolean) {
+    if (!custom) return;
+    const next = [...custom.brMatch.legendBanMatches];
+    while (next.length <= matchIdx) next.push(true);
+    next[matchIdx] = enabled;
+    persist({ ...custom, brMatch: { ...custom.brMatch, legendBanMatches: next } });
   }
 
   function updateRankPoint(rank: BRRank, value: number) {
@@ -738,8 +921,20 @@ export default function CustomDetailBR({ id }: { id: string }) {
                     <option key={n} value={n}>{n}</option>
                   ))}
                 </select>
-                <span className="text-xs text-zinc-400">1チーム{teamSize}人想定</span>
               </div>
+              {custom.brMatch.legendBanEnabled &&
+                custom.brTeams.length > 0 &&
+                !showTotal &&
+                currentMatch + 1 < matchCount &&
+                (custom.brMatch.legendBanMatches[currentMatch + 1] ?? true) && (
+                  <button
+                    onClick={() => setShowLegendTally(true)}
+                    title={`第${currentMatch + 1}試合の使用レジェンドを集計して第${currentMatch + 2}試合のBANを決める`}
+                    className="shrink-0 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white hover:bg-red-600 active:scale-95 transition-transform"
+                  >
+                    BAN集計
+                  </button>
+                )}
             </div>
 
             {custom.brTeams.length === 0 ? (
@@ -860,6 +1055,15 @@ export default function CustomDetailBR({ id }: { id: string }) {
                         : 'なし'}
                     </p>
 
+                    {custom.brMatch.legendBanEnabled && currentMatch > 0 && (custom.brMatch.legendBanMatches[currentMatch] ?? true) && (
+                      <p className="mb-2 text-xs text-red-500 dark:text-red-400">
+                        🚫 第{currentMatch + 1}試合のBANレジェンド：{' '}
+                        {(custom.brMatch.legendBans[currentMatch] ?? []).length > 0
+                          ? (custom.brMatch.legendBans[currentMatch] ?? []).join('・')
+                          : 'なし'}
+                      </p>
+                    )}
+
                     <div className="grid grid-cols-1 items-start gap-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                       {custom.brTeams.map((team, i) => {
                         const takenPlacements = new Set(
@@ -930,6 +1134,19 @@ export default function CustomDetailBR({ id }: { id: string }) {
           onUpdateFemaleDiscountEnabled={updateFemaleDiscountEnabled}
           onUpdateCapShortfallHandicap={updateCapShortfallHandicap}
           onUpdateKillPointCapsEnabled={updateKillPointCapsEnabled}
+          onUpdateLegendBanEnabled={updateLegendBanEnabled}
+          onUpdateLegendBanMatch={updateLegendBanMatch}
+        />
+      )}
+
+      {showLegendTally && currentMatch + 1 < matchCount && (
+        <LegendTallyDialog
+          prevMatchNumber={currentMatch + 1}
+          banTargetMatchNumber={currentMatch + 2}
+          maxTeamCount={maxTeamCount}
+          counts={custom.brMatch.legendUsageCounts[currentMatch] ?? {}}
+          onUpdateCount={(legendName, count) => updateLegendUsageCount(currentMatch, legendName, count)}
+          onClose={() => setShowLegendTally(false)}
         />
       )}
 

@@ -1,4 +1,4 @@
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';
 
 export type ChangelogEntry = {
   version: string;
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.2.0',
+    date: '2026-09-15',
+    title: 'レジェンドBAN機能追加',
+    changes: [
+      '特別ルールに「レジェンドBAN」を追加',
+    ],
+  },
   {
     version: '1.1.0',
     date: '2026-09-05',

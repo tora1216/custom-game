@@ -8,6 +8,7 @@ import {
   DEFAULT_PLACEMENT_BONUS,
   DEFAULT_KILL_POINT_CAPS,
   DEFAULT_KILL_POINT_CAPS_ENABLED,
+  DEFAULT_LEGEND_BAN_ENABLED,
   DEFAULT_BR_RANK_POINTS,
   DEFAULT_BR_TEAM_POINT_CAP,
   DEFAULT_BR_FEMALE_DISCOUNT,
@@ -31,6 +32,10 @@ const SAMPLE_CUSTOMS: Custom[] = [
       placementBonus: [...DEFAULT_PLACEMENT_BONUS],
       killPointCaps: [...DEFAULT_KILL_POINT_CAPS],
       killPointCapsEnabled: DEFAULT_KILL_POINT_CAPS_ENABLED,
+      legendBanEnabled: DEFAULT_LEGEND_BAN_ENABLED,
+      legendBans: [],
+      legendBanMatches: [],
+      legendUsageCounts: [],
     },
     brMatchCount: 1,
     brRankPoints: {
@@ -79,8 +84,16 @@ function normalizeCustom(c: Custom): Custom {
       placementBonus: [...DEFAULT_PLACEMENT_BONUS],
       killPointCaps: [...DEFAULT_KILL_POINT_CAPS],
       killPointCapsEnabled: DEFAULT_KILL_POINT_CAPS_ENABLED,
+      legendBanEnabled: DEFAULT_LEGEND_BAN_ENABLED,
+      legendBans: [],
+      legendBanMatches: [],
+      legendUsageCounts: [],
     };
   }
+  if (c.brMatch.legendBanEnabled === undefined) c.brMatch.legendBanEnabled = DEFAULT_LEGEND_BAN_ENABLED;
+  if (!c.brMatch.legendBans) c.brMatch.legendBans = [];
+  if (!c.brMatch.legendBanMatches) c.brMatch.legendBanMatches = [];
+  if (!c.brMatch.legendUsageCounts) c.brMatch.legendUsageCounts = [];
   if (!c.brMatchCount) c.brMatchCount = 1;
   if (!c.brRankPoints) {
     c.brRankPoints = {

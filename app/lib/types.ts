@@ -126,12 +126,20 @@ export const DEFAULT_KILL_POINT_VALUE = 1;
 // キルポイント上限（配列のindex 0 = 1試合目の上限）。配列外の試合は上限なし。
 export const DEFAULT_KILL_POINT_CAPS: (number | null)[] = [6, 6];
 export const DEFAULT_KILL_POINT_CAPS_ENABLED = true;
+export const DEFAULT_LEGEND_BAN_ENABLED = false;
 
 export type BRMatchSettings = {
   killPointValue: number;
   placementBonus: number[];
   killPointCaps: (number | null)[];
   killPointCapsEnabled: boolean;
+  legendBanEnabled: boolean;
+  // 試合ごとのBAN対象レジェンド名（配列のindex = 試合番号-1）
+  legendBans: string[][];
+  // 試合ごとにレジェンドBANを適用するか（配列のindex = 試合番号-1。未設定はtrue扱い）
+  legendBanMatches: boolean[];
+  // 試合ごとのレジェンド使用数集計（配列のindex = 試合番号-1。key = レジェンド名、value = 使用チーム数）
+  legendUsageCounts: Record<string, number>[];
 };
 
 export type BRMatchScoreBreakdown = {

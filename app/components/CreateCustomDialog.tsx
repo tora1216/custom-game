@@ -9,6 +9,7 @@ import {
   DEFAULT_PLACEMENT_BONUS,
   DEFAULT_KILL_POINT_CAPS,
   DEFAULT_KILL_POINT_CAPS_ENABLED,
+  DEFAULT_LEGEND_BAN_ENABLED,
   DEFAULT_BR_RANK_POINTS,
   DEFAULT_BR_TEAM_POINT_CAP,
   DEFAULT_BR_FEMALE_DISCOUNT,
@@ -45,6 +46,10 @@ export default function CreateCustomDialog({ onClose, onSave }: Props) {
         placementBonus: [...DEFAULT_PLACEMENT_BONUS],
         killPointCaps: [...DEFAULT_KILL_POINT_CAPS],
         killPointCapsEnabled: DEFAULT_KILL_POINT_CAPS_ENABLED,
+        legendBanEnabled: DEFAULT_LEGEND_BAN_ENABLED,
+        legendBans: [],
+        legendBanMatches: [],
+        legendUsageCounts: [],
       },
       brMatchCount: 1,
       brRankPoints: {

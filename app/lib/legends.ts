@@ -24,7 +24,7 @@ export const ROLE_COLORS: Record<LegendRole, string> = {
 export const LEGENDS: Legend[] = [
   // アサルト
   { name: 'バンガロール',     role: 'アサルト' },
-  { name: 'ヒヒューズ',        role: 'アサルト' },
+  { name: 'ヒューズ',        role: 'アサルト' },
   { name: 'レヴナント',      role: 'アサルト' },
   { name: 'マッドマギー',     role: 'アサルト' },
   { name: 'バリスティック',   role: 'アサルト' },
@@ -35,6 +35,7 @@ export const LEGENDS: Legend[] = [
   { name: 'ホライゾン',      role: 'スカーミッシャー' },
   { name: 'オルター',      role: 'スカーミッシャー' },
   { name: 'アッシュ',        role: 'スカーミッシャー' },
+  { name: 'アクセル',        role: 'スカーミッシャー' },
   // リコン
   { name: 'ブラッドハウンド', role: 'リコン' },
   { name: 'クリプト',        role: 'リコン' },
