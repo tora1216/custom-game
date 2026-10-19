@@ -1,4 +1,4 @@
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.3.0';
 
 export type ChangelogEntry = {
   version: string;
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.3.0',
+    date: '2026-10-19',
+    title: 'リザルト画像からの順位・キル自動入力機能追加',
+    changes: [
+      '「画像から入力」でマッチリザルト画面のスクリーンショットから順位・キル数を自動入力',
+      '読み取り結果を画像と見比べて修正できる確認画面を追加',
+      'チームカードの結果欄を順位→キルの順に変更',
+    ],
+  },
   {
     version: '1.2.0',
     date: '2026-09-15',

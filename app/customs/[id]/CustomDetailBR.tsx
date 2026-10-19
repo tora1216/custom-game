@@ -27,6 +27,7 @@ import {
 } from '../../lib/types';
 import { brPlayerPoints, brHandicapBonus, brTeamGrandTotal } from '../../lib/teamDivision';
 import { LEGENDS } from '../../lib/legends';
+import ResultImportDialog, { ImportedResult } from './ResultImportDialog';
 
 const STORAGE_KEY = 'customs';
 const TEAM_HEADER = [
@@ -175,6 +176,21 @@ function BRTeamCard({
       <div className="flex items-center gap-1.5 border-t border-zinc-100 px-3 py-1.5 dark:border-[#2c2f52]">
         <span className="shrink-0 text-xs text-zinc-400">結果</span>
         <label className="ml-auto flex shrink-0 items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+          順位
+          <select
+            value={matchResult.placement ?? ''}
+            onChange={(e) => onPlacementChange(e.target.value === '' ? null : Number(e.target.value))}
+            className="w-20 shrink-0 rounded-lg border border-zinc-200 px-1.5 py-0.5 text-xs text-zinc-900 focus:border-emerald-400 focus:outline-none dark:border-[#383c68] dark:bg-[#272847] dark:text-zinc-50"
+          >
+            <option value="">未設定</option>
+            {Array.from({ length: Math.max(teamCount, matchResult.placement ?? 0) }, (_, i) => i + 1).map((p) => (
+              <option key={p} value={p} disabled={takenPlacements.has(p)}>
+                {p}位{takenPlacements.has(p) ? '（使用済み）' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex shrink-0 items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
           キル
           <input
             type="number"
@@ -186,26 +202,11 @@ function BRTeamCard({
             className="w-12 rounded-lg border border-zinc-200 px-1.5 py-0.5 text-xs text-zinc-900 focus:border-emerald-400 focus:outline-none dark:border-[#383c68] dark:bg-[#272847] dark:text-zinc-50"
           />
         </label>
-        <label className="flex shrink-0 items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
-          順位
-          <select
-            value={matchResult.placement ?? ''}
-            onChange={(e) => onPlacementChange(e.target.value === '' ? null : Number(e.target.value))}
-            className="w-20 shrink-0 rounded-lg border border-zinc-200 px-1.5 py-0.5 text-xs text-zinc-900 focus:border-emerald-400 focus:outline-none dark:border-[#383c68] dark:bg-[#272847] dark:text-zinc-50"
-          >
-            <option value="">未設定</option>
-            {Array.from({ length: teamCount }, (_, i) => i + 1).map((p) => (
-              <option key={p} value={p} disabled={takenPlacements.has(p)}>
-                {p}位{takenPlacements.has(p) ? '（使用済み）' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-3 py-1 text-xs text-zinc-400 dark:border-[#2c2f52]">
-        <span>キル{scoreBreakdown.killPoints}pt</span>
-        <span>+</span>
         <span>順位{scoreBreakdown.placementPoints}pt</span>
+        <span>+</span>
+        <span>キル{scoreBreakdown.killPoints}pt</span>
         <span>=</span>
         <span className="font-bold text-indigo-600 dark:text-indigo-400">累計{scoreBreakdown.total}pt</span>
       </div>
@@ -558,6 +559,9 @@ export default function CustomDetailBR({ id }: { id: string }) {
   // レジェンド使用数集計ダイアログの開閉
   const [showLegendTally, setShowLegendTally] = useState(false);
 
+  // リザルト画像取り込みダイアログの開閉
+  const [showResultImport, setShowResultImport] = useState(false);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -715,6 +719,20 @@ export default function CustomDetailBR({ id }: { id: string }) {
         ? { ...t, matches: t.matches.map((m, j) => (j === matchIdx ? { ...m, ...patch } : m)) }
         : t,
     );
+    persist({ ...custom, brTeams: next });
+  }
+
+  function applyImportedResults(matchIdx: number, results: ImportedResult[]) {
+    if (!custom) return;
+    const byTeam = new Map(results.map((r) => [r.teamIdx, r]));
+    const next = custom.brTeams.map((t, i) => {
+      const r = byTeam.get(i);
+      if (!r) return t;
+      return {
+        ...t,
+        matches: t.matches.map((m, j) => (j === matchIdx ? { kills: r.kills, placement: r.placement } : m)),
+      };
+    });
     persist({ ...custom, brTeams: next });
   }
 
@@ -922,6 +940,16 @@ export default function CustomDetailBR({ id }: { id: string }) {
                   ))}
                 </select>
               </div>
+              <div className="flex items-center gap-1.5">
+              {custom.brTeams.length > 0 && !showTotal && (
+                <button
+                  onClick={() => setShowResultImport(true)}
+                  title={`リザルト画面のスクリーンショットから第${currentMatch + 1}試合のキル・順位を入力`}
+                  className="shrink-0 rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white hover:bg-indigo-700 active:scale-95 transition-transform"
+                >
+                  画像から入力
+                </button>
+              )}
               {custom.brMatch.legendBanEnabled &&
                 custom.brTeams.length > 0 &&
                 !showTotal &&
@@ -935,6 +963,7 @@ export default function CustomDetailBR({ id }: { id: string }) {
                     BAN集計
                   </button>
                 )}
+              </div>
             </div>
 
             {custom.brTeams.length === 0 ? (
@@ -1147,6 +1176,18 @@ export default function CustomDetailBR({ id }: { id: string }) {
           counts={custom.brMatch.legendUsageCounts[currentMatch] ?? {}}
           onUpdateCount={(legendName, count) => updateLegendUsageCount(currentMatch, legendName, count)}
           onClose={() => setShowLegendTally(false)}
+        />
+      )}
+
+      {showResultImport && (
+        <ResultImportDialog
+          teams={custom.brTeams}
+          matchNumber={currentMatch + 1}
+          onApply={(results) => {
+            applyImportedResults(currentMatch, results);
+            setShowResultImport(false);
+          }}
+          onClose={() => setShowResultImport(false)}
         />
       )}
 
